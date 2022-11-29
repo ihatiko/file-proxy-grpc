@@ -16,11 +16,12 @@ type Provider struct {
 	ssl      bool
 }
 
-func NewProvider(user string, password string, url string, ssl bool) *Provider {
-	return &Provider{user: user, password: password, url: url, ssl: ssl}
+func NewProvider(user string, password string, url string, ssl bool) (*Provider, error) {
+	provider := &Provider{user: user, password: password, url: url, ssl: ssl}
+	return provider, provider.connect()
 }
 
-func (m *Provider) Connect() error {
+func (m *Provider) connect() error {
 	var err error
 	m.client, err = minio.New(m.url, &minio.Options{
 		Creds:  credentials.NewStaticV4(m.user, m.password, ""),
