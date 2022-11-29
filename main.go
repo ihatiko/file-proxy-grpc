@@ -3,18 +3,70 @@ package main
 import (
 	"awesomeProject1/pkg/minio"
 	pb "awesomeProject1/protoc"
-	"context"
+	"bytes"
+	"fmt"
 	"github.com/gofiber/fiber/v2"
-	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"io"
 	"log"
+	"path"
 )
 
-//https://dev.to/techschoolguru/upload-file-in-chunks-with-client-streaming-grpc-golang-4loc
-type FileServer struct {
+type Service struct {
 }
 
-func (s FileServer) UploadImage(ctx context.Context, opts ...grpc.CallOption) (pb.FileService_UploadImageClient, error) {
-	return nil, nil
+const maxImageSize = 1 << 20
+
+func (s *Service) UploadImage(stream pb.FileService_UploadFileServer) error {
+	req, err := stream.Recv()
+	if err != nil {
+		return status.Errorf(codes.Unknown, "cannot receive image info")
+	}
+	imageData := bytes.Buffer{}
+	imageSize := 0
+
+	extension := req.GetInfo().GetExtension()
+	bucket := req.GetInfo().GetBucket()
+	name := req.GetInfo().GetName()
+
+	for {
+		log.Print("waiting to receive more data")
+
+		req, err := stream.Recv()
+		if err == io.EOF {
+			log.Print("no more data")
+			break
+		}
+		if err != nil {
+			return status.Errorf(codes.Unknown, "cannot receive chunk data: %v", err)
+		}
+
+		chunk := req.GetChunkData()
+		size := len(chunk)
+
+		log.Printf("received a chunk with size: %d", size)
+
+		imageSize += size
+		if imageSize > maxImageSize {
+			return status.Errorf(codes.InvalidArgument, "image is too large: %d > %d", imageSize, maxImageSize)
+		}
+		_, err = imageData.Write(chunk)
+		if err != nil {
+			return status.Errorf(codes.Internal, "cannot write chunk data: %v", err)
+		}
+	}
+	//TODO CONFIG public dns
+	url := "https://localhost:9090"
+	res := &pb.UploadFileResponse{
+		Url: path.Join(url, bucket, fmt.Sprintf("%s.%s", name, extension)),
+	}
+	err = stream.SendAndClose(res)
+	if err != nil {
+		return status.Errorf(codes.Unknown, "cannot send response: %v", err)
+	}
+
+	return nil
 }
 
 func main() {

@@ -3,23 +3,24 @@ syntax = "proto3";
 package file;
 option go_package = ".;pb";
 
-message UploadImageRequest {
+message UploadFileInfoRequest {
   oneof data {
-    ImageInfo info = 1;
+    FileInfo info = 1;
     bytes chunk_data = 2;
   };
 }
 
-message ImageInfo {
-  string laptop_id = 1;
-  string image_type = 2;
+message FileInfo {
+  string bucket = 1;
+  string extension = 2;
+  string name = 3;
+  string contentType = 4;
 }
 
-message UploadImageResponse {
-  string id = 1;
-  uint32 size = 2;
+message UploadFileResponse {
+  string url = 1;
 }
 
 service FileService {
-  rpc UploadImage(stream UploadImageRequest) returns (UploadImageResponse) {};
+  rpc UploadFile(stream UploadFileInfoRequest) returns (UploadFileResponse) {};
 }
